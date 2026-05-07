@@ -4,9 +4,11 @@
 // ============================================
 
 pipeline {
+
     agent any
 
     parameters {
+
         choice(
             name: 'BROWSER',
             choices: ['chrome', 'firefox', 'edge'],
@@ -33,6 +35,7 @@ pipeline {
     }
 
     environment {
+
         TEST_ENV = "${params.ENV}"
         BROWSER = "${params.BROWSER}"
         HEADLESS = "${params.HEADLESS}"
@@ -42,21 +45,36 @@ pipeline {
     stages {
 
         // ============================================
+        // Clean Workspace
+        // ============================================
+
+        stage('Clean Workspace') {
+
+            steps {
+
+                cleanWs()
+
+                echo "Workspace cleaned successfully"
+            }
+        }
+
+        // ============================================
         // Checkout Source Code
         // ============================================
 
         stage('Checkout') {
+
             steps {
 
                 checkout([
                     $class: 'GitSCM',
                     branches: [[name: '*/main']],
                     userRemoteConfigs: [[
-                        url: 'https://github.com/sudheerkasha/CAPSTONE.git'
+                        url: 'https://github.com/sudheerkasha/NOTES_AUTOMATION_FRAMEWORK_CAP.git'
                     ]]
                 ])
 
-                echo "Code checked out successfully from GitHub repository"
+                echo "Code checked out successfully"
             }
         }
 
@@ -65,6 +83,7 @@ pipeline {
         // ============================================
 
         stage('Setup Environment') {
+
             steps {
 
                 script {
@@ -74,7 +93,9 @@ pipeline {
                         sh '''
                             python3 -m venv venv
                             . venv/bin/activate
-                            pip install --upgrade pip
+
+                            python -m pip install --upgrade pip
+
                             pip install -r requirements.txt
                         '''
 
@@ -82,9 +103,68 @@ pipeline {
 
                         bat '''
                             python -m venv venv
+
                             call venv\\Scripts\\activate
-                            pip install --upgrade pip
+
+                            python -m pip install --upgrade pip
+
                             pip install -r requirements.txt
+                        '''
+                    }
+                }
+            }
+        }
+
+        // ============================================
+        // Debug Test Collection
+        // ============================================
+
+        stage('Debug Test Collection') {
+
+            steps {
+
+                script {
+
+                    if (isUnix()) {
+
+                        sh '''
+                            . venv/bin/activate
+
+                            echo ===== CURRENT DIRECTORY =====
+                            pwd
+
+                            echo ===== TEST FILES =====
+                            find tests
+
+                            echo ===== PYTHON VERSION =====
+                            python --version
+
+                            echo ===== PYTEST VERSION =====
+                            pytest --version
+
+                            echo ===== COLLECTING TESTS =====
+                            pytest --cache-clear --collect-only -v
+                        '''
+
+                    } else {
+
+                        bat '''
+                            call venv\\Scripts\\activate
+
+                            echo ===== CURRENT DIRECTORY =====
+                            cd
+
+                            echo ===== TEST FILES =====
+                            dir tests
+
+                            echo ===== PYTHON VERSION =====
+                            python --version
+
+                            echo ===== PYTEST VERSION =====
+                            pytest --version
+
+                            echo ===== COLLECTING TESTS =====
+                            pytest --cache-clear --collect-only -v
                         '''
                     }
                 }
@@ -96,6 +176,7 @@ pipeline {
         // ============================================
 
         stage('API Health Check') {
+
             steps {
 
                 script {
@@ -104,6 +185,7 @@ pipeline {
 
                         sh '''
                             . venv/bin/activate
+
                             python -c "import requests; r=requests.get('https://practice.expandtesting.com/notes/api/health-check'); print(f'API Status: {r.status_code}')"
                         '''
 
@@ -111,6 +193,7 @@ pipeline {
 
                         bat '''
                             call venv\\Scripts\\activate
+
                             python -c "import requests; r=requests.get('https://practice.expandtesting.com/notes/api/health-check'); print(f'API Status: {r.status_code}')"
                         '''
                     }
@@ -128,17 +211,44 @@ pipeline {
 
                 script {
 
-                    def cmd = """
-                    pytest tests/ ^
-                    -v ^
-                    -s ^
-                    --junitxml=reports/results.xml ^
-                    --alluredir=reports/allure-results ^
-                    --reruns=2 ^
-                    --reruns-delay=2
-                    """
+                    if (isUnix()) {
 
-                    runTests(cmd)
+                        sh '''
+                            . venv/bin/activate
+
+                            rm -rf reports/allure-results
+
+                            pytest \
+                            -v \
+                            -s \
+                            tests \
+                            --cache-clear \
+                            --junitxml=reports/results.xml \
+                            --alluredir=reports/allure-results \
+                            --reruns=2 \
+                            --reruns-delay=2
+                        '''
+
+                    } else {
+
+                        bat '''
+                            call venv\\Scripts\\activate
+
+                            if exist reports\\allure-results (
+                                rmdir /s /q reports\\allure-results
+                            )
+
+                            pytest ^
+                            -v ^
+                            -s ^
+                            tests ^
+                            --cache-clear ^
+                            --junitxml=reports/results.xml ^
+                            --alluredir=reports/allure-results ^
+                            --reruns=2 ^
+                            --reruns-delay=2
+                        '''
+                    }
                 }
             }
         }
@@ -183,39 +293,17 @@ pipeline {
 
         success {
 
-            echo ' All tests PASSED!'
+            echo 'All tests PASSED!'
         }
 
         failure {
 
-            echo ' Some tests FAILED. Check Allure report for details.'
+            echo 'Some tests FAILED. Check Allure report.'
         }
 
         cleanup {
 
             cleanWs()
         }
-    }
-}
-
-// ============================================
-// Helper Function
-// ============================================
-
-def runTests(String command) {
-
-    if (isUnix()) {
-
-        sh """
-            . venv/bin/activate
-            ${command}
-        """
-
-    } else {
-
-        bat """
-            call venv\\Scripts\\activate
-            ${command}
-        """
     }
 }
