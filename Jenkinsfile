@@ -121,55 +121,31 @@ pipeline {
 
         stage('Debug Test Collection') {
 
-            steps {
+    steps {
 
-                script {
+        bat '''
+        call venv\\Scripts\\activate
 
-                    if (isUnix()) {
+        echo ===== CURRENT DIRECTORY =====
+        cd
 
-                        sh '''
-                            . venv/bin/activate
+        echo ===== PROJECT FILES =====
+        dir
 
-                            echo ===== CURRENT DIRECTORY =====
-                            pwd
+        echo ===== TEST FILES =====
+        dir /s tests
 
-                            echo ===== TEST FILES =====
-                            find tests
+        echo ===== PYTHON VERSION =====
+        python --version
 
-                            echo ===== PYTHON VERSION =====
-                            python --version
+        echo ===== INSTALLED PACKAGES =====
+        pip list
 
-                            echo ===== PYTEST VERSION =====
-                            pytest --version
-
-                            echo ===== COLLECTING TESTS =====
-                            pytest --cache-clear --collect-only -v
-                        '''
-
-                    } else {
-
-                        bat '''
-                            call venv\\Scripts\\activate
-
-                            echo ===== CURRENT DIRECTORY =====
-                            cd
-
-                            echo ===== TEST FILES =====
-                            dir tests
-
-                            echo ===== PYTHON VERSION =====
-                            python --version
-
-                            echo ===== PYTEST VERSION =====
-                            pytest --version
-
-                            echo ===== COLLECTING TESTS =====
-                            pytest --cache-clear --collect-only -v
-                        '''
-                    }
-                }
-            }
-        }
+        echo ===== PYTEST COLLECTION =====
+        pytest --cache-clear --collect-only -vv
+        '''
+    }
+}
 
         // ============================================
         // API Health Check
