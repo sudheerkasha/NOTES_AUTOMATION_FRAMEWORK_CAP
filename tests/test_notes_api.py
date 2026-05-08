@@ -41,18 +41,18 @@ class TestNotesAPI:
         assert "data" in data
         logger.info(" TC-16: GET all notes PASSED")
 
-    # @allure.story("Get Notes")
-    # @pytest.mark.api
-    # @pytest.mark.regression
-    # def test_get_notes_returns_list(self, authenticated_api):
-    #     """TC-17: Verify GET /notes returns a list."""
-    #     api, user_info = authenticated_api
-    #     response = api.get_all_notes()
+    @allure.story("Get Notes")
+    @pytest.mark.api
+    @pytest.mark.regression
+    def test_get_notes_returns_list(self, authenticated_api):
+        """TC-17: Verify GET /notes returns a list."""
+        api, user_info = authenticated_api
+        response = api.get_all_notes()
 
-    #     data = response.json()
-    #     assert isinstance(data["data"], list), \
-    #         "Notes data should be a list"
-    #     logger.info(" TC-17: Notes list format PASSED")
+        data = response.json()
+        assert isinstance(data["data"], list), \
+            "Notes data should be a list"
+        logger.info(" TC-17: Notes list format PASSED")
 
     # ----- CREATE NOTE VIA API -----
 
