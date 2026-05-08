@@ -1,6 +1,6 @@
 // ============================================
 // Jenkins CI/CD Pipeline
-// UI + API Hybrid Automation Framework
+// UI + API Automation Framework
 // ============================================
 
 pipeline {
@@ -15,31 +15,18 @@ pipeline {
             description: 'Browser for UI tests'
         )
 
-        choice(
-            name: 'ENV',
-            choices: ['dev', 'staging', 'production'],
-            description: 'Target environment'
-        )
-
         booleanParam(
             name: 'HEADLESS',
             defaultValue: true,
-            description: 'Run in headless mode'
-        )
-
-        string(
-            name: 'PARALLEL_WORKERS',
-            defaultValue: '4',
-            description: 'Number of parallel workers'
+            description: 'Run tests in headless mode'
         )
     }
 
     environment {
 
-        TEST_ENV = "${params.ENV}"
+        PYTHONPATH = "${WORKSPACE}"
         BROWSER = "${params.BROWSER}"
         HEADLESS = "${params.HEADLESS}"
-        PYTHONPATH = "${WORKSPACE}"
     }
 
     stages {
@@ -62,19 +49,16 @@ pipeline {
         // Checkout Source Code
         // ============================================
 
-        stage('Checkout') {
+        stage('Checkout Code') {
 
             steps {
 
-                checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: '*/main']],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/sudheerkasha/NOTES_AUTOMATION_FRAMEWORK_CAP.git'
-                    ]]
-                ])
+                git(
+                    branch: 'main',
+                    url: 'https://github.com/sudheerkasha/NOTES_AUTOMATION_FRAMEWORK_CAP.git'
+                )
 
-                echo "Code checked out successfully"
+                echo "GitHub repository cloned successfully"
             }
         }
 
@@ -86,32 +70,17 @@ pipeline {
 
             steps {
 
-                script {
+                bat '''
+                python -m venv venv
 
-                    if (isUnix()) {
+                call venv\\Scripts\\activate
 
-                        sh '''
-                            python3 -m venv venv
-                            . venv/bin/activate
+                python -m pip install --upgrade pip
 
-                            python -m pip install --upgrade pip
+                pip install -r requirements.txt
+                '''
 
-                            pip install -r requirements.txt
-                        '''
-
-                    } else {
-
-                        bat '''
-                            python -m venv venv
-
-                            call venv\\Scripts\\activate
-
-                            python -m pip install --upgrade pip
-
-                            pip install -r requirements.txt
-                        '''
-                    }
-                }
+                echo "Python environment setup completed"
             }
         }
 
@@ -119,113 +88,60 @@ pipeline {
         // Debug Test Collection
         // ============================================
 
-        stage('Debug Test Collection') {
-
-    steps {
-
-        bat '''
-        call venv\\Scripts\\activate
-
-        echo ===== CURRENT DIRECTORY =====
-        cd
-
-        echo ===== PROJECT FILES =====
-        dir
-
-        echo ===== TEST FILES =====
-        dir /s tests
-
-        echo ===== PYTHON VERSION =====
-        python --version
-
-        echo ===== INSTALLED PACKAGES =====
-        pip list
-
-        echo ===== PYTEST COLLECTION =====
-        pytest --cache-clear --collect-only -vv
-        '''
-    }
-}
-
-        // ============================================
-        // API Health Check
-        // ============================================
-
-        stage('API Health Check') {
+        stage('Collect Test Cases') {
 
             steps {
 
-                script {
+                bat '''
+                call venv\\Scripts\\activate
 
-                    if (isUnix()) {
+                echo ===== CURRENT DIRECTORY =====
+                cd
 
-                        sh '''
-                            . venv/bin/activate
+                echo ===== TEST FILES =====
+                dir /s tests
 
-                            python -c "import requests; r=requests.get('https://practice.expandtesting.com/notes/api/health-check'); print(f'API Status: {r.status_code}')"
-                        '''
+                echo ===== PYTHON VERSION =====
+                python --version
 
-                    } else {
+                echo ===== PYTEST VERSION =====
+                pytest --version
 
-                        bat '''
-                            call venv\\Scripts\\activate
-
-                            python -c "import requests; r=requests.get('https://practice.expandtesting.com/notes/api/health-check'); print(f'API Status: {r.status_code}')"
-                        '''
-                    }
-                }
+                echo ===== COLLECTING TESTS =====
+                pytest --cache-clear --collect-only -vv
+                '''
             }
         }
 
         // ============================================
-        // Run Complete Test Suite
+        // Run Test Suite
         // ============================================
 
         stage('Run Tests') {
 
             steps {
 
-                script {
+                bat '''
+                call venv\\Scripts\\activate
 
-                    if (isUnix()) {
+                if exist reports\\allure-results (
+                    rmdir /s /q reports\\allure-results
+                )
 
-                        sh '''
-                            . venv/bin/activate
+                if not exist reports (
+                    mkdir reports
+                )
 
-                            rm -rf reports/allure-results
-
-                            pytest \
-                            -v \
-                            -s \
-                            tests \
-                            --cache-clear \
-                            --junitxml=reports/results.xml \
-                            --alluredir=reports/allure-results \
-                            --reruns=2 \
-                            --reruns-delay=2
-                        '''
-
-                    } else {
-
-                        bat '''
-                            call venv\\Scripts\\activate
-
-                            if exist reports\\allure-results (
-                                rmdir /s /q reports\\allure-results
-                            )
-
-                            pytest ^
-                            -v ^
-                            -s ^
-                            tests ^
-                            --cache-clear ^
-                            --junitxml=reports/results.xml ^
-                            --alluredir=reports/allure-results ^
-                            --reruns=2 ^
-                            --reruns-delay=2
-                        '''
-                    }
-                }
+                pytest ^
+                tests ^
+                -v ^
+                -s ^
+                --cache-clear ^
+                --junitxml=reports/results.xml ^
+                --alluredir=reports/allure-results ^
+                --reruns 2 ^
+                --reruns-delay 2
+                '''
             }
         }
 
@@ -242,19 +158,19 @@ pipeline {
                     jdk: '',
                     results: [[path: 'reports/allure-results']]
                 )
+
+                echo "Allure report generated successfully"
             }
         }
     }
 
     // ============================================
-    // Post Actions
+    // Post Build Actions
     // ============================================
 
     post {
 
         always {
-
-            echo 'Archiving test artifacts...'
 
             archiveArtifacts(
                 artifacts: 'reports/**/*',
@@ -265,16 +181,18 @@ pipeline {
                 testResults: 'reports/results.xml',
                 allowEmptyResults: true
             )
+
+            echo "Reports archived successfully"
         }
 
         success {
 
-            echo 'All tests PASSED!'
+            echo "Pipeline executed successfully"
         }
 
         failure {
 
-            echo 'Some tests FAILED. Check Allure report.'
+            echo "Pipeline execution failed"
         }
 
         cleanup {
