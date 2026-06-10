@@ -20,8 +20,8 @@ parameters {
 
 environment {
     PYTHONPATH = "${WORKSPACE}"
-    BROWSER = "${params.BROWSER}"
-    HEADLESS = "${params.HEADLESS}"
+    TEST_BROWSER = "${params.BROWSER}"
+    HEADLESS_MODE = "${params.HEADLESS}"
 }
 
 stages {
@@ -29,7 +29,7 @@ stages {
     stage('Clean Workspace') {
         steps {
             cleanWs()
-            echo "Workspace cleaned successfully"
+            echo 'Workspace cleaned successfully'
         }
     }
 
@@ -39,13 +39,28 @@ stages {
                 branch: 'main',
                 url: 'https://github.com/sudheerkasha/NOTES_AUTOMATION_FRAMEWORK_CAP.git'
             )
-            echo "GitHub repository cloned successfully"
+
+            echo 'Repository cloned successfully'
         }
     }
 
-    stage('Setup Environment') {
+    stage('Verify Environment') {
         steps {
             sh '''
+                echo "===== WORKSPACE ====="
+                pwd
+
+                echo "===== FILES ====="
+                ls -la
+            '''
+        }
+    }
+
+    stage('Setup Python Environment') {
+        steps {
+            sh '''
+                python3 --version
+
                 python3 -m venv venv
 
                 . venv/bin/activate
@@ -55,29 +70,20 @@ stages {
                 pip install -r requirements.txt
             '''
 
-            echo "Python environment setup completed"
+            echo 'Python environment setup completed'
         }
     }
 
-    stage('Collect Test Cases') {
+    stage('Collect Tests') {
         steps {
             sh '''
                 . venv/bin/activate
 
-                echo "===== CURRENT DIRECTORY ====="
-                pwd
-
-                echo "===== TEST FILES ====="
-                find tests -type f
-
-                echo "===== PYTHON VERSION ====="
-                python --version
-
                 echo "===== PYTEST VERSION ====="
                 pytest --version
 
-                echo "===== COLLECTING TESTS ====="
-                pytest --cache-clear --collect-only -vv
+                echo "===== COLLECT TESTS ====="
+                pytest --collect-only -q
             '''
         }
     }
@@ -87,31 +93,30 @@ stages {
             sh '''
                 . venv/bin/activate
 
-                rm -rf reports/allure-results
-
                 mkdir -p reports
+                rm -rf reports/allure-results
 
                 pytest tests \
                 -v \
                 -s \
                 --cache-clear \
                 --junitxml=reports/results.xml \
-                --alluredir=reports/allure-results \
-                --reruns 2 \
-                --reruns-delay 2
+                --alluredir=reports/allure-results
             '''
         }
     }
 
     stage('Generate Allure Report') {
         steps {
-            allure(
-                includeProperties: false,
-                jdk: '',
-                results: [[path: 'reports/allure-results']]
-            )
-
-            echo "Allure report generated successfully"
+            script {
+                if (fileExists('reports/allure-results')) {
+                    allure(
+                        includeProperties: false,
+                        jdk: '',
+                        results: [[path: 'reports/allure-results']]
+                    )
+                }
+            }
         }
     }
 }
@@ -130,22 +135,24 @@ post {
             allowEmptyResults: true
         )
 
-        echo "Reports archived successfully"
+        echo 'Reports archived successfully'
     }
 
     success {
-        echo "Pipeline executed successfully"
+        echo 'Pipeline executed successfully'
     }
 
     failure {
-        echo "Pipeline execution failed"
+        echo 'Pipeline execution failed'
     }
 
     cleanup {
-        cleanWs()
+        cleanWs(
+            deleteDirs: true,
+            disableDeferredWipeout: true
+        )
     }
 }
 ```
 
 }
-
